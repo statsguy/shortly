@@ -5,7 +5,7 @@
 # this line in a merged PR IS the deploy (scripts/promote.sh writes it). CI verifies the
 # digest's release provenance, and that staging ran it first.
 image:
-  digest: "sha256:9df4c29bd25d9f69b0ce2f7776a0affeab4d2bca18c859668927e398f4a21670" # v0.7.0
+  digest: "sha256:f8e4982b3a4197e0d68b83ef7bd06f0213bd54afffd65f4a088c21fd0852e046" # v0.7.1
 autoscaling:
   minReplicas: 2
   maxReplicas: 4
