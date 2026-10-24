@@ -155,6 +155,8 @@ Staging and prod are deployed by **Argo CD from git** (docs/DESIGN.md, GitOps wi
    scripts/promote.sh prod sha256:<same digest> --pr
    ```
 
+   If it says `REFUSED: staging has not run …` but `grep digest deploy/envs/staging.yaml` on an up-to-date main shows that digest, the guard itself is wrong (as in PR #55): don't hand-edit around it; fix the script. CI runs the same check in `tests/test_gitops.py`.
+
    Merge it. Prod is a **canary**: the Rollout gives the new version 10%, then 50% of the traffic, judging each step (about 7 minutes; "Canary releases" below):
 
    ```bash

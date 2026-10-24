@@ -1070,6 +1070,7 @@ The controls concentrate on the supply chain and the runtime blast radius; abuse
 | Canary (PR #40) | The first prod upgrade after the Rollout existed failed, and so did Helm's automatic rollback: Argo Rollouts edits the stable/canary Services and the HTTPRoute, and Helm 4's server-side apply refused them as conflicts | `--force-conflicts` on prod upgrades and rollbacks (`deploy.sh`, RUNBOOK); e2e steps 4–5b upgrade and roll back prod repeatedly |
 | Canary (PR #40) | A healthy canary was aborted in CI for "no traffic": its first measurement, 30 s in, came before Prometheus had discovered and scraped the new pod twice | `traffic` allows one miss; the CI delay is 45 s (default 60 s) |
 | Canary (PR #40) | The HPA drill passed without proving anything: a Rollout's ready count includes the old version's pods for 30 s after a promotion or abort, so "a new pod is ready" was true at t=0 | The drill waits for ready ≤ the HPA floor before loading, and fails otherwise |
+| v0.7.1 promotion (PR #55) | `promote.sh prod` refused v0.7.1 although staging ran it on main: `git log -p … \| grep -q` under `pipefail`, where grep quits at the first match and `git log`, still writing, dies of SIGPIPE. It appeared only once the history outgrew the pipe buffer, so the small test repo never saw it | History read into a variable first; `test_promote_allows_prod_with_a_long_staging_history` fails on the old code |
 
 ## Known limitations and future work
 

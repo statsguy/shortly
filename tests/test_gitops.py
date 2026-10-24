@@ -156,6 +156,24 @@ def test_promote_allows_prod_once_staging_ran_it_on_main(repo: Path) -> None:
     assert _env_digest("prod", (repo / "deploy/envs/prod.yaml").read_text()) == NEW
 
 
+def test_promote_allows_prod_with_a_long_staging_history(repo: Path) -> None:
+    """Regression: `git log -p | grep -q` under pipefail refused a digest staging HAD run.
+
+    grep -q stops at the first match (the newest promotion); git log, still writing older
+    history, dies of SIGPIPE and fails the pipeline. Only shows once the history is bigger
+    than the pipe buffer, as on the real main by v0.7.1.
+    """
+    git = ["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@t"]
+    staging = repo / "deploy/envs/staging.yaml"
+    staging.write_text(staging.read_text() + "".join(f"# {'x' * 70} {i}\n" for i in range(4000)))
+    subprocess.run([*git, "commit", "-qam", "a large old change"], check=True)
+    assert _promote(repo, "staging", NEW).returncode == 0
+    subprocess.run([*git, "commit", "-qam", "deploy staging"], check=True)
+    subprocess.run([*git, "push", "-q", "origin", "main"], check=True)
+    result = _promote(repo, "prod", NEW)
+    assert result.returncode == 0, result.stderr
+
+
 # ------------------------------------------------------------------- deploy.sh vs Argo CD
 def test_deploy_refuses_an_environment_argo_cd_manages(tmp_path: Path) -> None:
     bin_dir, log = tmp_path / "bin", tmp_path / "calls.log"

@@ -35,7 +35,11 @@ version=$(sed -nE 's|.*refs/tags/(v[0-9][^ ]*).*|\1|p' <<<"$verified" | head -n 
 
 if [[ "$ENV" == prod ]]; then
   git fetch --quiet origin main
-  if ! git log -p origin/main -- deploy/envs/staging.yaml | grep -q "^[+ ]  digest: \"$DIGEST\""; then
+  # Into a variable, not `git log | grep -q`: with pipefail, grep -q quitting at the first
+  # match kills git log with SIGPIPE, and the pipeline fails exactly when staging DID run
+  # the digest (seen promoting v0.7.1 once the history outgrew the pipe buffer).
+  staging_history=$(git log -p origin/main -- deploy/envs/staging.yaml)
+  if ! grep -q "^[+ ]  digest: \"$DIGEST\"" <<<"$staging_history"; then
     echo "REFUSED: staging has not run $DIGEST ($version) on main. Promote it to staging first." >&2
     exit 1
   fi
