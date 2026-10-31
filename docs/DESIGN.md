@@ -890,11 +890,11 @@ flowchart LR
 
 ### The platform under Argo CD
 
-Since PR #60 everything under the app comes from git too. Only Argo CD itself and the secrets are still put there by `scripts/cluster.sh`. A merged change to a platform chart's values, a policy or the Gateway reaches the cluster within a minute, as a promotion does, and a hand edit is reverted.
+Since PR #60 everything under the app comes from git too. Only Argo CD itself and each environment's database and its secrets are still put there by `scripts/cluster.sh`; since platform plan 4.1 the platform's own secrets come from the secret store, through External Secrets. A merged change to a platform chart's values, a policy or the Gateway reaches the cluster within a minute, as a promotion does, and a hand edit is reverted.
 
 ```mermaid
 flowchart TB
-  CS["scripts/cluster.sh up<br/>Helm: Argo CD (bootstrap)<br/>secrets: grafana-admin, seaweedfs-s3<br/>(and their copies in the secret store)"] --> Root
+  CS["scripts/cluster.sh up<br/>Helm: Argo CD (bootstrap)"] --> Root
   Root["Application platform (root)<br/>deploy/argocd/platform, a Helm chart<br/>parameters: arch, revision, components"]
   Root --> WB
   Root --> W0
@@ -904,7 +904,7 @@ flowchart TB
   end
   subgraph W0["wave 0: charts and their CRDs, and what needs only fast CRDs"]
     direction LR
-    SS[secret-store<br/>store namespace, ClusterSecretStore]
+    SS[secret-store<br/>store namespace, ClusterSecretStore,<br/>generated values]
     MS[metrics-server<br/>vendored manifest]
     EG[envoy-gateway]
     GW[gateway<br/>Gateway, listeners]
@@ -931,7 +931,8 @@ flowchart TB
 | metrics-server vendored, not fetched | The release manifest is checked into `deploy/platform/metrics-server/` with its SHA-256; a kustomize patch adds the kind-only flag |
 | Two sync waves, with Application health on | The policies need Kyverno's webhook serving, and the alerts on Argo CD need kube-prometheus-stack's CRDs: both come from slow charts, so they wait in wave 1. The Gateway and the tool routes need only Envoy Gateway's CRDs, which arrive within seconds, so they stay in wave 0 and the sync retry covers the race. In wave 1 they waited for the slowest chart, and the Envoy proxy's 2-minute start stopped overlapping with it: the platform job's install went from about 2.5 to 7.5 minutes (CI, PR #60). Argo CD only waits for a wave's Applications to be Healthy if it reports Application health, which `argocd-cm` turns back on (`deploy/kind/argocd-values.yaml`) |
 | A wave before the charts (platform plan 4.1) | External Secrets Operator syncs in wave -1, so its CRDs and controller exist before wave 0, whose charts will read Secrets it makes (Grafana's admin password, the bucket's keys) |
-| A secret store inside the cluster | The `secret-store` namespace holds the source of each platform secret; the `platform` ClusterSecretStore (External Secrets' Kubernetes provider) reads it through a ServiceAccount that may only read Secrets there, for the namespaces it names. No secrets server to run, unseal or back up on a laptop; a real cluster points the ClusterSecretStore at a secret manager and nothing else changes. Until 4.1b makes the store their source, `cluster.sh` generates the platform's secrets and copies them into it, so the store starts with the values already in use |
+| A secret store inside the cluster | The `secret-store` namespace holds the source of each platform secret; the `platform` ClusterSecretStore (External Secrets' Kubernetes provider) reads it through a ServiceAccount that may only read Secrets there, for the namespaces it names. No secrets server to run, unseal or back up on a laptop; a real cluster points the ClusterSecretStore at a secret manager and nothing else changes |
+| Each value generated once, in the store | A Password generator per secret, written into the store by an ExternalSecret with `refreshPolicy: CreatedOnce`: created only when the store lacks it, never refreshed, so a resync can't rotate a password everything uses. Consumers (`grafana-admin` in `monitoring`, `seaweedfs-s3` in `backups`) are ExternalSecrets synced with the Application that reads them; their templates derive the rest (the user name, `s3.json`). A cluster from before 4.1 had its values copied into the store first (`cluster.sh`), so nothing was rotated |
 | A separate `platform` AppProject | The platform must create CRDs, ClusterRoles and webhooks. The app's project still may create nothing cluster-scoped, and neither project may deploy into the other's namespaces |
 | No resources-finalizer on the children | Deleting a child Application, or the root, orphans its resources instead of deleting the monitoring stack or the admission webhook along with it |
 | Server-side apply and server-side diff | The kube-prometheus-stack, Kyverno and Envoy Gateway CRDs are too big for client-side apply, and fields that other controllers write (webhook CA bundles) are not drift |
